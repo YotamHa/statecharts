@@ -26,8 +26,30 @@ import org.yakindu.sct.model.sgen.GeneratorEntry
 import org.yakindu.sct.model.stext.stext.EventDefinition
 import org.yakindu.sct.model.stext.stext.InterfaceScope
 import org.yakindu.sct.model.stext.stext.VariableDefinition
+import org.yakindu.sct.model.sgraph.Vertex
+import org.eclipse.xtext.generator.IFileSystemAccess
+import org.yakindu.sct.generator.core.ISGraphGenerator
+import org.yakindu.sct.model.sgen.GeneratorEntry
+import org.yakindu.sct.model.sgraph.State
+import org.yakindu.sct.model.sgraph.Statechart
+//import com.yakindu.domain.scenario
+import com.yakindu.sct.domain.scenario.validation.AbstractScenarioTextJavaValidator
 
 import static org.eclipse.xtext.util.Strings.*
+import java.util.ArrayList
+import org.yakindu.sct.model.sgraph.Statechart
+import javax.swing.plaf.synth.Region
+import org.eclipse.emf.common.util.EList
+import org.eclipse.emf.common.util.BasicEList
+import org.eclipse.emf.ecore.util.EObjectContainmentEList
+import org.eclipse.emf.ecore.util.EObjectContainmentWithInverseEList
+import org.yakindu.sct.model.sgraph.Scope
+import org.yakindu.sct.model.sgraph.State
+import java.util.AbstractList
+import org.yakindu.base.types.Event
+import com.yakindu.sct.domain.scenario.scenariotext.ScenarioStateScope
+import com.yakindu.sct.domain.scenario.scenariotext.RequestedEventSet
+import com.yakindu.sct.domain.scenario.scenariotext.BlockedEventSet
 
 class Statemachine {
 	
@@ -69,8 +91,19 @@ class Statemachine {
 			«flow.defaultInterfaceFunctions(entry)»
 			«flow.functionImplementations»
 			«flow.runCycleFunction»
+			«flow.raiseNextEventfunction»
+			«flow.getRequestedFunctions»
+			«flow.getBlockedFunctions»
+			«flow.getEventsFunctions»
+			«flow.executeRequestedEventsFunction»
 		}
 	'''
+	
+	
+	
+	
+	
+	
 	
 	def protected createImports(ExecutionFlow flow, GeneratorEntry entry) '''
 		«IF entry.createInterfaceObserver && flow.hasOutgoingEvents»
@@ -80,6 +113,8 @@ class Statemachine {
 		«IF flow.timed»
 			import «entry.getBasePackageName()».ITimer;
 		«ENDIF»
+		import java.util.HashSet;
+		import java.util.Iterator;
 	'''
 	
 	def protected createFieldDeclarations(ExecutionFlow flow, GeneratorEntry entry) '''
@@ -574,6 +609,27 @@ class Statemachine {
 				}
 			}
 			clearEvents();
+			executeRequestedEvents();
+		}
+	'''
+	
+	def protected executeRequestedEventsFunction(ExecutionFlow flow) '''
+		private void executeRequestedEvents() {			
+			«flow.newFunction»
+			for (nextStateIndex = 0; nextStateIndex < stateVector.length; nextStateIndex++) {
+				switch (stateVector[nextStateIndex]) {
+				«FOR state : flow.states»
+					«IF state.reactSequence != null»
+						case «state.stateName.asEscapedIdentifier»:
+							«state.reactSequence.functionName»();
+							break;
+				«ENDIF»
+				«ENDFOR»
+				default:
+					// «getNullStateName()»
+				}
+			}
+			clearEvents();
 		}
 	'''
 	
@@ -631,4 +687,142 @@ class Statemachine {
 		}
 
 	'''
+	
+	def protected newFunction(ExecutionFlow flow)'''
+		HashSet<String> enabledEvents = getEnabledEvents();
+		String nextEvent = chooseEvent(enabledEvents);
+		raiseNextEvent(nextEvent);
+	'''
+		
+	def protected raiseNextEventfunction(ExecutionFlow flow)'''
+		«val myList = flow.allEvents»
+		public void raiseNextEvent(String chosenEvent){
+			if (chosenEvent == null){
+				return;
+			} 
+			switch (chosenEvent) {
+				«FOR event : myList»
+					«IF event.direction.value == 1»
+						case "«event.name.toFirstLower»" : raise«event.name.toFirstUpper»();
+						break;
+					«ENDIF»
+					«IF event.direction.value == 2»
+						case "«event.name.toFirstLower»" : sCInterface.raise«event.name.toFirstUpper»();
+						break;
+					«ENDIF»
+				«ENDFOR»
+			}
+		}
+		
+	'''
+	
+	def protected EList<Event> getAllEvents(ExecutionFlow flow){
+		val scopes = flow.scopes
+		val myScope = scopes.get(0)
+		val eventList = myScope.events
+		return eventList
+	}
+	
+	def protected getGetRequestedFunctions(ExecutionFlow flow)'''
+	«FOR state : flow.states»
+		private HashSet<String> requested_«state.stateName.asEscapedIdentifier»(){
+		HashSet<String> requestedList = new HashSet<String>();
+		«val sourceState = state.sourceElement as State»
+			«FOR requestedEventSet : sourceState.scopes.filter(ScenarioStateScope).map[eventSets.filter(RequestedEventSet)].flatten»
+				«FOR event : requestedEventSet.events»
+					requestedList.add("«event.name.toFirstLower»");
+				«ENDFOR»
+			«ENDFOR»
+		return requestedList;			
+		}	
+	«ENDFOR»
+	
+	'''
+	
+	def protected getBlockedFunctions(ExecutionFlow flow)'''
+	«FOR state : flow.states»
+		private HashSet<String> blocked_«state.stateName.asEscapedIdentifier»(){
+		HashSet<String> blockedList = new HashSet<String>();
+		«val sourceState = state.sourceElement as State»
+			«FOR blockedEventSet : sourceState.scopes.filter(ScenarioStateScope).map[eventSets.filter(BlockedEventSet)].flatten»
+				«FOR event : blockedEventSet.events»
+					blockedList.add("«event.name.toFirstLower»");
+				«ENDFOR»
+			«ENDFOR»
+		return blockedList;			
+		}	
+	«ENDFOR»
+	
+	'''
+		
+	def protected getEnabledEventsFunction(ExecutionFlow flow)'''
+	private HashSet<String> getEnabledEvents(){
+		HashSet<String> requestedEvents = getAllRequestedEvents();
+		HashSet<String> blockedEvents = getAllBlockedEvents();
+		requestedEvents.removeAll(blockedEvents);
+		return requestedEvents;
+	}
+	
+	'''
+	
+	def protected getAllRequestedEventsFunction(ExecutionFlow flow)'''
+	private HashSet<String> getAllRequestedEvents(){
+		HashSet<String> requestedEvents = new HashSet<String>();
+		for (nextStateIndex = 0; nextStateIndex < stateVector.length; nextStateIndex++) {
+			switch (stateVector[nextStateIndex]) {
+				«FOR state : flow.states»
+					case «state.stateName.asEscapedIdentifier»:
+						requestedEvents.addAll(requested_«state.stateName.toFirstLower»());
+						break;
+				«ENDFOR»
+				default:
+				// «getNullStateName()»
+			}
+			
+		}
+		return requestedEvents;
+	}
+	
+	'''
+	
+	def protected getAllBlockedEventsFunction(ExecutionFlow flow)'''
+	private HashSet<String> getAllBlockedEvents(){
+		HashSet<String> blockedEvents = new HashSet<String>();
+		for (nextStateIndex = 0; nextStateIndex < stateVector.length; nextStateIndex++) {
+			switch (stateVector[nextStateIndex]) {
+				«FOR state : flow.states»
+					case «state.stateName.asEscapedIdentifier»:
+						blockedEvents.addAll(blocked_«state.stateName.toFirstLower»());
+						break;
+				«ENDFOR»
+				default:
+				// «getNullStateName()»
+			}
+			
+		}
+		return blockedEvents;
+	}
+	
+	'''
+	
+	def protected chooseEventFucntion(ExecutionFlow flow)'''
+	private String chooseEvent(HashSet<String> events){
+		if (!events.isEmpty()){
+			Iterator<String> it = events.iterator();
+			return it.next();
+		} else {
+			return null;
+		}
+	}
+	
+	'''
+	def protected getEventsFunctions(ExecutionFlow it)'''
+		«enabledEventsFunction»
+		«allBlockedEventsFunction»
+		«allRequestedEventsFunction»
+		«chooseEventFucntion»
+	'''
+	
 }
+
+

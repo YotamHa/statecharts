@@ -217,6 +217,7 @@ class SExecExtensions {
 		nodes.forEach( s | if (s.reactSequence.called) funcs += s.reactSequence )
 		return funcs
 	}
+	
 	def dispatch Reaction reaction(Check it) { eContainer as Reaction }
 	def dispatch Reaction reaction(EObject it) { eContainer?.reaction }
 	def dispatch Reaction reaction(Reaction it) { it }

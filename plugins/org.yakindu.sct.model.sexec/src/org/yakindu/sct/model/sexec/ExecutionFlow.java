@@ -12,6 +12,7 @@ package org.yakindu.sct.model.sexec;
 
 import org.eclipse.emf.common.util.EList;
 import org.yakindu.sct.model.sgraph.ScopedElement;
+import java.util.ArrayList;
 
 /**
  * <!-- begin-user-doc -->
@@ -187,5 +188,9 @@ public interface ExecutionFlow extends ScopedElement, ExecutionScope, ExecutionN
 	 * @generated
 	 */
 	void setStaticInitSequence(Sequence value);
+	
+	
+
+	
 
 } // ExecutionFlow

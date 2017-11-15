@@ -614,22 +614,28 @@ class Statemachine {
 	'''
 	
 	def protected executeRequestedEventsFunction(ExecutionFlow flow) '''
-		private void executeRequestedEvents() {			
-			«flow.newFunction»
-			for (nextStateIndex = 0; nextStateIndex < stateVector.length; nextStateIndex++) {
-				switch (stateVector[nextStateIndex]) {
-				«FOR state : flow.states»
-					«IF state.reactSequence != null»
-						case «state.stateName.asEscapedIdentifier»:
-							«state.reactSequence.functionName»();
-							break;
-				«ENDIF»
-				«ENDFOR»
-				default:
-					// «getNullStateName()»
+		private void executeRequestedEvents() {
+			HashSet<String> enabledEvents = getEnabledEvents();
+			String nextEvent = chooseEvent(enabledEvents);
+			while (nextEvent != null){
+				raiseNextEvent(nextEvent);			
+			
+				for (nextStateIndex = 0; nextStateIndex < stateVector.length; nextStateIndex++) {
+					switch (stateVector[nextStateIndex]) {
+					«FOR state : flow.states»
+						«IF state.reactSequence != null»
+							case «state.stateName.asEscapedIdentifier»:
+								«state.reactSequence.functionName»();
+								break;
+					«ENDIF»
+					«ENDFOR»
+					default:
+						// «getNullStateName()»
+					}
 				}
+				enabledEvents = getEnabledEvents();
+				nextEvent = chooseEvent(enabledEvents);
 			}
-			clearEvents();
 		}
 	'''
 	

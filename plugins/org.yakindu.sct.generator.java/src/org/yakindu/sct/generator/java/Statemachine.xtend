@@ -261,7 +261,8 @@ class Statemachine {
 			switch (state) {
 			«FOR s : flow.states»
 			case «s.stateName.asEscapedIdentifier»:
-				return «IF s.leaf»stateVector[«s.stateVector.offset»] == State.«s.stateName.asEscapedIdentifier»«ELSE»stateVector[«s.stateVector.offset»].ordinal() >= State.
+				return «IF s.leaf»stateVector[«s.stateVector.offset»] == State.«s.stateName.asEscapedIdentifier»«ELSE»
+				stateVector[«s.stateVector.offset»].ordinal() >= State.
 						«s.stateName.asEscapedIdentifier».ordinal()&& stateVector[«s.stateVector.offset»].ordinal() <= State.«s.subStates.last.stateName.asEscapedIdentifier».ordinal()«ENDIF»;
 			«ENDFOR»
 			default:
@@ -633,6 +634,7 @@ class Statemachine {
 						// «getNullStateName()»
 					}
 				}
+				clearEvents();
 				enabledEvents = getEnabledEvents();
 				nextEvent = chooseEvent(enabledEvents);
 			}
@@ -739,8 +741,12 @@ class Statemachine {
 					requestedList.add("«event.name.toFirstLower»");
 				«ENDFOR»
 			«ENDFOR»
+		«IF state.superScope.superScope.superScope !== null»
+			requestedList.addAll(requested_«state.superScope.superScope.stateName.asEscapedIdentifier»());
+		«ENDIF»
 		return requestedList;			
-		}	
+		}
+			
 	«ENDFOR»
 	
 	'''
@@ -755,6 +761,9 @@ class Statemachine {
 					blockedList.add("«event.name.toFirstLower»");
 				«ENDFOR»
 			«ENDFOR»
+		«IF state.superScope.superScope.superScope !== null»
+			blockedList.addAll(blocked_«state.superScope.superScope.stateName.asEscapedIdentifier»());
+		«ENDIF»
 		return blockedList;			
 		}	
 	«ENDFOR»
